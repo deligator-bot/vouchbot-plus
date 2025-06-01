@@ -42,6 +42,7 @@ async def ping(ctx):
 
 # Launch bot
 keep_alive()
+with open('/etc/secrets/BOT_TOKEN', 'r') as f:
+    token = f.read().strip()
 
-print("Bot token:", os.getenv("BOT_TOKEN"))  # Debug: toon wat er binnenkomt
-bot.run(os.getenv("BOT_TOKEN"))
+bot.run(token)
