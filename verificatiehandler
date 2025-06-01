@@ -75,7 +75,6 @@ class VerificationHandler(commands.Cog):
 
                     current = self.pending_verification[uid]
 
-                    # Voeg poging toe of zet op blacklist
                     if current["attempts"] >= 2:
                         self.blacklist.add(uid)
                         log_channel = discord.utils.get(guild.text_channels, name="blacklist-log")
@@ -90,6 +89,49 @@ class VerificationHandler(commands.Cog):
                             await channel.delete(reason="Verificatie verlopen")
 
             del self.pending_verification[uid]
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        if payload.emoji.name != "✅":
+            return
+
+        guild = self.bot.get_guild(payload.guild_id)
+        member = guild.get_member(payload.user_id)
+
+        if member is None or member.bot:
+            return
+
+        for user_id, data in self.pending_verification.items():
+            if data.get("channel_id") == payload.channel_id:
+                verified_user = guild.get_member(user_id)
+                if verified_user is None:
+                    return
+
+                # Alleen de aangewezen voucher mag bevestigen
+                if member.id != data["inviter"]:
+                    channel = guild.get_channel(payload.channel_id)
+                    if channel:
+                        await channel.send(f"❌ Alleen de voucher mag deze speler bevestigen.")
+                    return
+
+                # Geef rol
+                role = discord.utils.get(guild.roles, name="transporter")
+                if role:
+                    await verified_user.add_roles(role, reason="Goedgekeurd door voucher")
+
+                try:
+                    await verified_user.send("✅ Je bent succesvol geverifieerd en hebt toegang gekregen!")
+                except:
+                    pass
+
+                # Verwijder verificatiekanaal
+                channel = guild.get_channel(payload.channel_id)
+                if channel:
+                    await channel.delete(reason="Verificatie bevestigd")
+
+                # Opschonen
+                del self.pending_verification[user_id]
+                return
 
     @commands.command()
     @commands.has_permissions(administrator=True)
