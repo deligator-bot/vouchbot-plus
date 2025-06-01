@@ -1,0 +1,44 @@
+import discord
+from discord.ext import commands
+import uuid
+
+class InviteManager(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.active_invites = {}  # user_id -> invite
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        if payload.member.bot:
+            return
+
+        guild = self.bot.get_guild(payload.guild_id)
+        channel = guild.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+
+        # Alleen reageren als het de juiste reactie is (pas emoji aan indien gewenst)
+        if str(payload.emoji) != "🔗":
+            return
+
+        inviter = payload.member
+        unique_id = str(uuid.uuid4())[:8]
+
+        # Genereer invite
+        invite = await channel.create_invite(max_uses=1, unique=True, reason=f"Vouch door {inviter}", max_age=3600)
+        self.active_invites[invite.code] = {
+            "inviter_id": inviter.id,
+            "used": False,
+            "uuid": unique_id
+        }
+
+        # DM naar de voucher
+        try:
+            await inviter.send(f"🎫 Unieke invite link gegenereerd:\n{invite.url}\nLet op: deze is 1 uur geldig en éénmalig bruikbaar.")
+        except discord.Forbidden:
+            await channel.send(f"{inviter.mention}, ik kon je geen DM sturen. Zet je DMs open.")
+
+    def get_inviter_by_code(self, code):
+        return self.active_invites.get(code)
+
+async def setup(bot):
+    await bot.add_cog(InviteManager(bot))
