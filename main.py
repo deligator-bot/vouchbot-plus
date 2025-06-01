@@ -4,6 +4,7 @@ async def load_extensions():
     await bot.load_extension("invite_manager")
     await bot.load_extension("verification_handler")
     await bot.load_extension("vouch_commands")
+    await bot.load_extension("invite_post")  # ⬅️ Deze regel is toegevoegd
 
 # Start de Flask-server + bot
 keep_alive()
