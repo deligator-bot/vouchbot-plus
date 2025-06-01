@@ -1,14 +1,29 @@
+import discord
+from discord.ext import commands
 import asyncio
 
+# ✅ Intents instellen
+intents = discord.Intents.default()
+intents.members = True
+intents.guilds = True
+intents.messages = True
+intents.reactions = True
+
+# ✅ Bot aanmaken
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# ✅ Keep alive server (Replit / Render)
+from keep_alive import keep_alive
+keep_alive()
+
+# ✅ Cogs laden
 async def load_extensions():
     await bot.load_extension("invite_manager")
     await bot.load_extension("verification_handler")
     await bot.load_extension("vouch_commands")
-    await bot.load_extension("invite_post")  # ⬅️ Deze regel is toegevoegd
+    await bot.load_extension("invite_post")  # Voeg extra cogs hier toe
 
-# Start de Flask-server + bot
-keep_alive()
-
+# ✅ Main starten
 async def main():
     await load_extensions()
     token = None
@@ -22,4 +37,5 @@ async def main():
     else:
         print("❌ Geen geldige token gevonden.")
 
+# ✅ Bot starten
 asyncio.run(main())
