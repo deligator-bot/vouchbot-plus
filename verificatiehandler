@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 class VerificationHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.pending_verification = {}  # user_id -> {"inviter": ..., "joined_at": ..., "attempts": ...}
+        self.pending_verification = {}  # user_id -> {"inviter": ..., "joined_at": ..., "attempts": ..., "channel_id": ...}
         self.blacklist = set()
         self.cleanup_loop.start()
 
@@ -32,18 +32,28 @@ class VerificationHandler(commands.Cog):
             await member.kick(reason="Zwarte lijst")
             return
 
-        # Markeer als pending
+        # Maak tijdelijk privé-verificatiekanaal
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        }
+        channel_name = f"verify-{member.name}".lower().replace(" ", "-")
+        verify_channel = await guild.create_text_channel(channel_name, overwrites=overwrites)
+
+        # Sla pending-verificatie op
         self.pending_verification[member.id] = {
             "inviter": inviter_id,
             "joined_at": datetime.utcnow(),
-            "attempts": 1
+            "attempts": 1,
+            "channel_id": verify_channel.id
         }
 
-        # Meld in verificatiekanaal
-        verify_channel = discord.utils.get(guild.text_channels, name="verify-info")
-        if verify_channel:
-            inviter_mention = f"<@{inviter_id}>" if inviter_id else "onbekend"
-            await verify_channel.send(f"🆕 Nieuw lid: {member.mention}\nVoucher: {inviter_mention}\n\n{inviter_mention}, bevestig met ✅ dat je deze speler vertrouwt.")
+        # Stuur verificatiebericht
+        inviter_mention = f"<@{inviter_id}>" if inviter_id else "onbekend"
+        await verify_channel.send(
+            f"🆕 Nieuw lid: {member.mention}\nVoucher: {inviter_mention}\n\n"
+            f"{inviter_mention}, bevestig met ✅ dat je deze speler vertrouwt."
+        )
 
     @tasks.loop(seconds=60)
     async def cleanup_loop(self):
@@ -63,13 +73,21 @@ class VerificationHandler(commands.Cog):
                     await member.send("⌛ Je bent verwijderd omdat je niet op tijd geverifieerd werd.")
                     await member.kick(reason="Geen vouch na 10 minuten.")
 
-                    # Voeg poging toe of blacklist
                     current = self.pending_verification[uid]
+
+                    # Voeg poging toe of zet op blacklist
                     if current["attempts"] >= 2:
                         self.blacklist.add(uid)
                         log_channel = discord.utils.get(guild.text_channels, name="blacklist-log")
                         if log_channel:
                             await log_channel.send(f"⚠️ Lid {member.name} is geblacklist wegens 2 joinpogingen zonder vouch.")
+
+                    # Verwijder tijdelijk verificatiekanaal
+                    channel_id = current.get("channel_id")
+                    if channel_id:
+                        channel = guild.get_channel(channel_id)
+                        if channel:
+                            await channel.delete(reason="Verificatie verlopen")
 
             del self.pending_verification[uid]
 
