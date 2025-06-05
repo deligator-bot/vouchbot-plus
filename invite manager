@@ -2,42 +2,66 @@ import discord
 from discord.ext import commands
 import uuid
 
+# Channel IDs (from context)
+GET_INVITE_CHANNEL_ID = 1380173141506129942
+VOUCH_LOG_CHANNEL_ID = 1380173161991110786
+
 class InviteManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_invites = {}  # user_id -> invite
+        self.active_invites = {}  # invite_code -> metadata
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
         if payload.member.bot:
             return
 
-        guild = self.bot.get_guild(payload.guild_id)
-        channel = guild.get_channel(payload.channel_id)
-        message = await channel.fetch_message(payload.message_id)
+        # Only react in the correct channel
+        if payload.channel_id != GET_INVITE_CHANNEL_ID:
+            return
 
-        # Alleen reageren als het de juiste reactie is (pas emoji aan indien gewenst)
+        # Only respond to the designated emoji
         if str(payload.emoji) != "🔗":
             return
 
+        guild = self.bot.get_guild(payload.guild_id)
+        channel = guild.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
         inviter = payload.member
-        unique_id = str(uuid.uuid4())[:8]
 
-        # Genereer invite
-        invite = await channel.create_invite(max_uses=1, unique=True, reason=f"Vouch door {inviter}", max_age=3600)
+        # Create invite
+        unique_id = str(uuid.uuid4())[:8]
+        invite = await channel.create_invite(
+            max_uses=1,
+            max_age=3600,
+            unique=True,
+            reason=f"Vouch by {inviter}"
+        )
+
+        # Store invite data
         self.active_invites[invite.code] = {
             "inviter_id": inviter.id,
             "used": False,
             "uuid": unique_id
         }
 
-        # DM naar de voucher
+        # DM the inviter
         try:
-            await inviter.send(f"🎫 Unieke invite link gegenereerd:\n{invite.url}\nLet op: deze is 1 uur geldig en éénmalig bruikbaar.")
+            await inviter.send(
+                f"🎫 Unique invite link generated:\n{invite.url}\nNote: this link is valid for 1 hour and can only be used once."
+            )
         except discord.Forbidden:
-            await channel.send(f"{inviter.mention}, ik kon je geen DM sturen. Zet je DMs open.")
+            await channel.send(f"{inviter.mention}, I couldn't send you a DM. Please enable your DMs.")
+
+        # Log the invite in the log channel
+        log_channel = guild.get_channel(VOUCH_LOG_CHANNEL_ID)
+        if log_channel:
+            await log_channel.send(
+                f"📨 {inviter.mention} generated a unique invite (`{invite.code}`) – valid for 1 hour, one-time use."
+            )
 
     def get_inviter_by_code(self, code):
+        """Returns the inviter data for a given invite code"""
         return self.active_invites.get(code)
 
 async def setup(bot):
