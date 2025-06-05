@@ -1,66 +1,76 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from discord.ui import View, Button
 
-# Log channel ID voor strikes
+# Log channel ID for strikes
 STRIKE_LOG_CHANNEL_ID = 1380180008004347994
 
 class VoucherReputation(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.vouch_map = {}      # user_id -> voucher_id
-        self.strike_counts = {}  # voucher_id -> int
+        self.strikes = {}  # user_id -> int
 
-    async def log_to_channel(self, guild, channel_id, message):
-        channel = guild.get_channel(channel_id)
+    async def log_to_channel(self, guild, message):
+        channel = guild.get_channel(STRIKE_LOG_CHANNEL_ID)
         if channel:
             await channel.send(message)
 
-    def register_vouch(self, user_id, voucher_id):
-        self.vouch_map[user_id] = voucher_id
+    @app_commands.command(name="strikevoucher", description="Geef een voucher een fout (strike).")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def strike_voucher(self, interaction: discord.Interaction, member: discord.Member):
+        if member.id not in self.strikes:
+            self.strikes[member.id] = 0
+        self.strikes[member.id] += 1
 
-    @app_commands.command(name="checkvouch", description="Bekijk wie iemand heeft gevouched.")
-    async def checkvouch(self, interaction: discord.Interaction, member: discord.Member):
-        voucher_id = self.vouch_map.get(member.id)
+        await interaction.response.send_message(f"⚠️ {member.mention} heeft nu {self.strikes[member.id]} strike(s).", ephemeral=False)
+        await self.log_to_channel(interaction.guild, f"⚠️ {member.mention} kreeg een strike van {interaction.user.mention}. Totaal: {self.strikes[member.id]}")
 
-        if not voucher_id:
+    @app_commands.command(name="checkvouch", description="Bekijk wie iemand heeft geinvite en hoeveel fouten die voucher heeft.")
+    async def check_vouch(self, interaction: discord.Interaction, member: discord.Member):
+        # Zoek wie de voucher was (uit de invite logs)
+        invite_cog = self.bot.get_cog("InviteManager")
+        inviter_id = None
+        for code, data in invite_cog.active_invites.items():
+            if data.get("used") and data.get("inviter_id"):
+                if member.id in [m.id for m in interaction.guild.members if m.joined_at and m.joined_at.timestamp()]:
+                    inviter_id = data["inviter_id"]
+                    break
+
+        if not inviter_id:
             await interaction.response.send_message("❌ Geen voucher gevonden voor deze gebruiker.", ephemeral=True)
             return
 
-        voucher_mention = f"<@{voucher_id}>"
-        strike_count = self.strike_counts.get(voucher_id, 0)
+        inviter = interaction.guild.get_member(inviter_id)
+        strikes = self.strikes.get(inviter_id, 0)
 
-        embed = discord.Embed(title="Vouch Info", color=discord.Color.blue())
-        embed.add_field(name="Gevouchte speler:", value=member.mention, inline=False)
-        embed.add_field(name="Voucher:", value=voucher_mention, inline=False)
-        embed.set_footer(text=f"Aantal strikes: {strike_count}")
+        view = StrikeButtonView(self, inviter)
+        await interaction.response.send_message(
+            f"👤 {member.mention} is geinvite door {inviter.mention}.
+⚠️ Deze voucher heeft {strikes} strike(s).",
+            view=view
+        )
 
-        view = View()
+class StrikeButtonView(discord.ui.View):
+    def __init__(self, cog, target_member):
+        super().__init__(timeout=None)
+        self.cog = cog
+        self.target_member = target_member
 
-        class ReportButton(Button):
-            def __init__(self):
-                super().__init__(label="Negatief beoordelen", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Geef extra strike ❌", style=discord.ButtonStyle.danger)
+    async def give_strike(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("⛔ Alleen admins kunnen strikes geven.", ephemeral=True)
+            return
 
-            async def callback(self, interaction_inner: discord.Interaction):
-                self.strike_counts[voucher_id] = self.strike_counts.get(voucher_id, 0) + 1
-                new_strikes = self.strike_counts[voucher_id]
-                await interaction_inner.response.send_message(f"⚠️ Voucher {voucher_mention} heeft nu {new_strikes} strike(s).", ephemeral=False)
-                await self.log_to_channel(interaction.guild, STRIKE_LOG_CHANNEL_ID,
-                    f"⚠️ {voucher_mention} kreeg een strike via beoordeling. Totaal nu: {new_strikes}.")
+        if self.target_member.id not in self.cog.strikes:
+            self.cog.strikes[self.target_member.id] = 0
+        self.cog.strikes[self.target_member.id] += 1
 
-        view.add_item(ReportButton())
-        await interaction.response.send_message(embed=embed, view=view)
-
-    @app_commands.command(name="strikevoucher", description="Geef handmatig een strike aan een voucher.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def strikevoucher(self, interaction: discord.Interaction, member: discord.Member):
-        self.strike_counts[member.id] = self.strike_counts.get(member.id, 0) + 1
-        strikes = self.strike_counts[member.id]
-
-        await interaction.response.send_message(f"⚠️ {member.mention} heeft nu {strikes} strike(s).", ephemeral=False)
-        await self.log_to_channel(interaction.guild, STRIKE_LOG_CHANNEL_ID,
-            f"⚠️ {member.mention} kreeg handmatig een strike. Totaal nu: {strikes}.")
+        await interaction.response.send_message(
+            f"⚠️ {self.target_member.mention} kreeg een extra strike. Totaal nu: {self.cog.strikes[self.target_member.id]}",
+            ephemeral=False
+        )
+        await self.cog.log_to_channel(interaction.guild, f"⚠️ {self.target_member.mention} kreeg een extra strike via knop door {interaction.user.mention}. Totaal: {self.cog.strikes[self.target_member.id]}")
 
 async def setup(bot):
     await bot.add_cog(VoucherReputation(bot))
