@@ -6,6 +6,9 @@ import uuid
 GET_INVITE_CHANNEL_ID = 1380173141506129942
 VOUCH_LOG_CHANNEL_ID = 1380173161991110786
 
+# Role ID for Voucher
+VOUCHER_ROLE_ID = 1380179951155941388
+
 class InviteManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -28,6 +31,10 @@ class InviteManager(commands.Cog):
         channel = guild.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         inviter = payload.member
+
+        # Check if inviter has the Voucher role
+        if not any(role.id == VOUCHER_ROLE_ID for role in inviter.roles):
+            return  # User does not have the voucher role
 
         # Create invite
         unique_id = str(uuid.uuid4())[:8]
@@ -66,3 +73,5 @@ class InviteManager(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(InviteManager(bot))
+
+
