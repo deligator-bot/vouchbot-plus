@@ -6,15 +6,24 @@ from datetime import datetime, timedelta
 TRANSPORTER_ROLE_ID = 1380179952665759827  # Transporter role
 VOUCHER_ROLE_ID = 1380179951155941388      # Voucher role
 
-# Tijd (seconden) om te wachten op bevestiging
+# Log channel IDs
+BLACKLIST_LOG_CHANNEL_ID = 1380179997515317279
+VOUCH_LOG_CHANNEL_ID = 1380179994357006428
+
+# Timeout (in minutes) for verification confirmation
 CONFIRMATION_TIMEOUT_MINUTES = 10
 
 class VerificationHandler(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.pending_verification = {}  # user_id -> {"inviter": ..., "joined_at": ..., "attempts": ..., "channel_id": ...}
+        self.pending_verification = {}  # user_id -> dict with inviter, joined_at, attempts, channel_id
         self.blacklist = set()
         self.cleanup_loop.start()
+
+    async def log_to_channel(self, guild, channel_id, message):
+        channel = guild.get_channel(channel_id)
+        if channel:
+            await channel.send(message)
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
@@ -24,7 +33,6 @@ class VerificationHandler(commands.Cog):
         guild = member.guild
         invites = await guild.invites()
 
-        # Zoek wie deze persoon heeft uitgenodigd via actieve invites
         invite_cog = self.bot.get_cog("InviteManager")
         inviter_id = None
         for invite in invites:
@@ -33,7 +41,6 @@ class VerificationHandler(commands.Cog):
                 invite_cog.active_invites[invite.code]["used"] = True
                 break
 
-        # Blacklist check
         if member.id in self.blacklist:
             try:
                 await member.send("🚫 You are blacklisted from this server.")
@@ -42,14 +49,12 @@ class VerificationHandler(commands.Cog):
             await member.kick(reason="Blacklisted user")
             return
 
-        # Overwrites voor het tijdelijke verificatiekanaal
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
-        # Voeg de voucher toe aan het kanaal als die bestaat
         if inviter_id:
             inviter = guild.get_member(inviter_id)
             if inviter:
@@ -58,7 +63,6 @@ class VerificationHandler(commands.Cog):
         channel_name = f"verify-{member.name}".lower().replace(" ", "-")
         verify_channel = await guild.create_text_channel(channel_name, overwrites=overwrites, reason="Temporary verification channel")
 
-        # Sla pending-verificatie op
         self.pending_verification[member.id] = {
             "inviter": inviter_id,
             "joined_at": datetime.utcnow(),
@@ -85,8 +89,7 @@ class VerificationHandler(commands.Cog):
                 to_kick.append(user_id)
 
         for uid in to_kick:
-            user = self.bot.get_user(uid)
-            guild = discord.utils.get(self.bot.guilds)  # Assuming 1 guild, adjust if needed
+            guild = discord.utils.get(self.bot.guilds)  # Assuming single guild
             member = guild.get_member(uid) if guild else None
             if member:
                 try:
@@ -99,9 +102,9 @@ class VerificationHandler(commands.Cog):
                 if current:
                     if current["attempts"] >= 2:
                         self.blacklist.add(uid)
-                        log_channel = discord.utils.get(guild.text_channels, name="blacklist-log")
-                        if log_channel:
-                            await log_channel.send(f"⚠️ Member {member.name} has been blacklisted due to 2 join attempts without vouch.")
+                        await self.log_to_channel(guild, BLACKLIST_LOG_CHANNEL_ID,
+                            f"⚠️ Member {member.name} has been blacklisted due to 2 join attempts without vouch."
+                        )
 
                     channel_id = current.get("channel_id")
                     if channel_id:
@@ -117,32 +120,32 @@ class VerificationHandler(commands.Cog):
             return
 
         guild = self.bot.get_guild(payload.guild_id)
-        if guild is None:
+        if not guild:
             return
 
         member = guild.get_member(payload.user_id)
-        if member is None or member.bot:
+        if not member or member.bot:
             return
 
         data = None
+        verified_user_id = None
         for user_id, info in self.pending_verification.items():
             if info.get("channel_id") == payload.channel_id:
                 data = info
                 verified_user_id = user_id
                 break
 
-        if data is None:
+        if not data:
             return
 
         verified_user = guild.get_member(verified_user_id)
-        if verified_user is None:
+        if not verified_user:
             return
 
-        # Alleen de aangewezen voucher mag bevestigen
         if member.id != data["inviter"]:
             channel = guild.get_channel(payload.channel_id)
             if channel:
-                await channel.send(f"❌ Only the voucher can confirm this user.")
+                await channel.send("❌ Only the voucher can confirm this user.")
             return
 
         transporter_role = guild.get_role(TRANSPORTER_ROLE_ID)
