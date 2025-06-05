@@ -92,14 +92,14 @@ class TimeoutBlacklist(commands.Cog):
             self.blacklist.add(member.id)
             await self.log_to_channel(guild, BLACKLIST_LOG_CHANNEL_ID, f"🚫 {member.mention} automatisch geblacklist na {count} timeouts.")
             try:
-                await member.send("🚫 Je bent geblacklist omdat je meerdere keren zonder bevestiging bent gejoined.")
+                await member.send("🚫 You have been blacklisted because you joined multiple times without being verified.")
             except discord.Forbidden:
                 pass
             await member.kick(reason="Blacklist na meerdere timeouts")
         else:
             await self.log_to_channel(guild, TIMEOUT_LOG_CHANNEL_ID, f"⏰ {member.mention} heeft een timeout gekregen ({count}/{MAX_TIMEOUTS_BEFORE_BLACKLIST}).")
             try:
-                await member.send(f"⏰ Je hebt een timeout gekregen van {TIMEOUT_DURATION_DAYS} dagen. Je mag daarna opnieuw proberen te joinen.")
+                await member.send(f"⏰ You have received a timeout of {TIMEOUT_DURATION_DAYS} days. You may try to join again after that period.")
             except discord.Forbidden:
                 pass
             await member.kick(reason="Timeout: no vouch received")
