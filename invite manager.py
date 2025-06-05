@@ -24,11 +24,9 @@ class InviteManager(commands.Cog):
         if payload.member.bot:
             return
 
-        # Only react in the correct channel
         if payload.channel_id != GET_INVITE_CHANNEL_ID:
             return
 
-        # Only respond to the designated emoji
         if str(payload.emoji) != "🔗":
             return
 
@@ -37,11 +35,9 @@ class InviteManager(commands.Cog):
         message = await channel.fetch_message(payload.message_id)
         inviter = payload.member
 
-        # Check if inviter has the Voucher role
         if not any(role.id == VOUCHER_ROLE_ID for role in inviter.roles):
-            return  # User does not have the voucher role
+            return
 
-        # Create invite
         unique_id = str(uuid.uuid4())[:8]
         invite = await channel.create_invite(
             max_uses=1,
@@ -50,14 +46,12 @@ class InviteManager(commands.Cog):
             reason=f"Vouch by {inviter}"
         )
 
-        # Store invite data
         self.active_invites[invite.code] = {
             "inviter_id": inviter.id,
             "used": False,
             "uuid": unique_id
         }
 
-        # DM the inviter
         try:
             await inviter.send(
                 f"🎫 Unique invite link generated:\n{invite.url}\nNote: this link is valid for 1 hour and can only be used once."
@@ -65,18 +59,51 @@ class InviteManager(commands.Cog):
         except discord.Forbidden:
             await channel.send(f"{inviter.mention}, I couldn't send you a DM. Please enable your DMs.")
 
-        # Log the invite in the log channel via helper
         await self.log_to_channel(
             guild,
             VOUCH_LOG_CHANNEL_ID,
             f"📨 {inviter.mention} generated a unique invite (`{invite.code}`) – valid for 1 hour, one-time use."
         )
 
+    @commands.Cog.listener()
+    async def on_member_join(self, member):
+        """Detect if a member joined using an active invite, and notify the inviter."""
+        if member.bot:
+            return
+
+        guild = member.guild
+        invites = await guild.invites()
+
+        for invite in invites:
+            if invite.code in self.active_invites:
+                inviter_id = self.active_invites[invite.code]["inviter_id"]
+                self.active_invites[invite.code]["used"] = True  # mark as used
+
+                inviter = guild.get_member(inviter_id)
+                if inviter:
+                    try:
+                        await inviter.send(
+                            f"⚠️ The player who used your invite just joined but hasn't been verified yet.\n"
+                            "Please make sure you're online and guide them through the verification process.\n"
+                            "Also explain the server rules and what’s expected of new members. Thanks!"
+                        )
+                    except discord.Forbidden:
+                        await self.log_to_channel(
+                            guild,
+                            VOUCH_LOG_CHANNEL_ID,
+                            f"⚠️ Tried to DM {inviter.mention}, but DMs are disabled."
+                        )
+
+                    await self.log_to_channel(
+                        guild,
+                        VOUCH_LOG_CHANNEL_ID,
+                        f"🔍 {member.mention} joined using invite from {inviter.mention} (`{invite.code}`)."
+                    )
+
+                break  # Only handle first matching invite
+
     def get_inviter_by_code(self, code):
-        """Returns the inviter data for a given invite code"""
         return self.active_invites.get(code)
 
 async def setup(bot):
     await bot.add_cog(InviteManager(bot))
-
-
