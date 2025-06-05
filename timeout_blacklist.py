@@ -37,6 +37,9 @@ class TimeoutBlacklist(commands.Cog):
         recent = [t for t in self.timeout_history[user_id] if now - t <= timedelta(days=TIMEOUT_WINDOW_DAYS)]
         return len(recent)
 
+    def is_blacklisted(self, user_id):
+        return user_id in self.blacklist
+
     @tasks.loop(minutes=10)
     async def cleanup_loop(self):
         now = datetime.utcnow()
@@ -45,44 +48,44 @@ class TimeoutBlacklist(commands.Cog):
             if not self.timeout_history[user_id]:
                 del self.timeout_history[user_id]
 
-    @app_commands.command(name="blacklist", description="Add a member to the blacklist.")
+    @app_commands.command(name="blacklist", description="Voegt een lid toe aan de blacklist.")
     @app_commands.checks.has_permissions(administrator=True)
     async def blacklist(self, interaction: discord.Interaction, member: discord.Member):
         self.blacklist.add(member.id)
-        await interaction.response.send_message(f"✅ {member.mention} has been added to the blacklist.")
-        await self.log_to_channel(interaction.guild, BLACKLIST_LOG_CHANNEL_ID, f"⚠️ {member.mention} manually blacklisted by {interaction.user.mention}.")
+        await interaction.response.send_message(f"✅ {member.mention} is toegevoegd aan de blacklist.", ephemeral=False)
+        await self.log_to_channel(interaction.guild, BLACKLIST_LOG_CHANNEL_ID, f"🚫 {member.mention} handmatig op de blacklist gezet door {interaction.user.mention}.")
 
-    @app_commands.command(name="unblacklist", description="Remove a member from the blacklist.")
+    @app_commands.command(name="unblacklist", description="Verwijdert een lid van de blacklist.")
     @app_commands.checks.has_permissions(administrator=True)
     async def unblacklist(self, interaction: discord.Interaction, member: discord.Member):
         if member.id in self.blacklist:
             self.blacklist.remove(member.id)
-            await interaction.response.send_message(f"✅ {member.mention} has been removed from the blacklist.")
-            await self.log_to_channel(interaction.guild, BLACKLIST_LOG_CHANNEL_ID, f"✅ {member.mention} manually removed from blacklist by {interaction.user.mention}.")
+            await interaction.response.send_message(f"✅ {member.mention} is verwijderd van de blacklist.", ephemeral=False)
+            await self.log_to_channel(interaction.guild, BLACKLIST_LOG_CHANNEL_ID, f"✅ {member.mention} verwijderd van de blacklist door {interaction.user.mention}.")
         else:
-            await interaction.response.send_message(f"❌ {member.mention} is not on the blacklist.")
+            await interaction.response.send_message(f"❌ {member.mention} staat niet op de blacklist.", ephemeral=True)
 
-    # Call this method when applying a timeout to a member
     async def apply_timeout(self, member: discord.Member):
+        """Toe te passen bij join zonder bevestiging binnen 10 minuten."""
         guild = member.guild
         self.add_timeout(member.id)
         count = self.count_recent_timeouts(member.id)
 
         if count >= MAX_TIMEOUTS_BEFORE_BLACKLIST:
             self.blacklist.add(member.id)
-            await self.log_to_channel(guild, BLACKLIST_LOG_CHANNEL_ID, f"⚠️ {member.mention} automatically blacklisted after {count} timeouts.")
+            await self.log_to_channel(guild, BLACKLIST_LOG_CHANNEL_ID, f"🚫 {member.mention} automatisch geblacklist na {count} timeouts.")
             try:
-                await member.send(f"⚠️ You have been blacklisted due to multiple timeouts.")
+                await member.send("🚫 Je bent geblacklist omdat je meerdere keren zonder bevestiging bent gejoined.")
             except discord.Forbidden:
                 pass
-            await member.kick(reason="Blacklisted due to multiple timeouts")
+            await member.kick(reason="Blacklist na meerdere timeouts")
         else:
-            await self.log_to_channel(guild, TIMEOUT_LOG_CHANNEL_ID, f"⏰ {member.mention} received a timeout ({count}/{MAX_TIMEOUTS_BEFORE_BLACKLIST}).")
+            await self.log_to_channel(guild, TIMEOUT_LOG_CHANNEL_ID, f"⏰ {member.mention} heeft een timeout gekregen ({count}/{MAX_TIMEOUTS_BEFORE_BLACKLIST}).")
             try:
-                await member.send(f"⏰ You received a timeout for {TIMEOUT_DURATION_DAYS} days.")
+                await member.send(f"⏰ Je hebt een timeout gekregen van {TIMEOUT_DURATION_DAYS} dagen.")
             except discord.Forbidden:
                 pass
-            # Implement any additional timeout actions here (kick, mute, etc.)
+            # Let op: Discord ondersteunt geen echte 'timeout' via API — eventueel manueel regelen.
 
 async def setup(bot):
     await bot.add_cog(TimeoutBlacklist(bot))
