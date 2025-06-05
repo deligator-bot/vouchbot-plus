@@ -21,7 +21,8 @@ async def load_extensions():
     await bot.load_extension("invite_manager")
     await bot.load_extension("verification_handler")
     await bot.load_extension("vouch_commands")
-    await bot.load_extension("invite_post")  # Voeg extra cogs hier toe
+    await bot.load_extension("invite_post")
+    await bot.load_extension("timeout_blacklist")
 
 # ✅ Main starten
 async def main():
