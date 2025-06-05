@@ -37,12 +37,12 @@ class VerificationHandler(commands.Cog):
         if timeout_cog:
             if member.id in timeout_cog.blacklist:
                 try:
-                    await member.send("🚫 You are blacklisted from this server.")
+                    await member.send("\U0001f6d1 You are blacklisted from this server.")
                 except discord.Forbidden:
                     pass
                 await member.kick(reason="Blacklisted user")
                 return
-            
+
             if timeout_cog.has_active_timeout(member.id):
                 try:
                     await member.send("⏰ You are still under a 7-day timeout and cannot rejoin the server yet.")
@@ -51,15 +51,29 @@ class VerificationHandler(commands.Cog):
                 await member.kick(reason="Active timeout")
                 return
 
-        # Determine inviter
+        # Determine inviter from InviteManager
         invites = await guild.invites()
         invite_cog = self.bot.get_cog("InviteManager")
         inviter_id = None
+        invite_used = None
+
         for invite in invites:
             if invite.code in invite_cog.active_invites:
                 inviter_id = invite_cog.active_invites[invite.code]["inviter_id"]
                 invite_cog.active_invites[invite.code]["used"] = True
+                invite_used = invite.code
                 break
+
+        # Reject manual invite joins
+        if inviter_id is None:
+            try:
+                await member.send("\u274c You joined using an unauthorized invite. Only bot-issued invites are allowed.")
+            except discord.Forbidden:
+                pass
+            await self.log_to_channel(guild, VOUCH_LOG_CHANNEL_ID,
+                f"\u26a0\ufe0f {member.mention} attempted to join via a non-bot invite and was removed.")
+            await member.kick(reason="Joined with non-bot invite")
+            return
 
         # Create verification channel
         overwrites = {
@@ -68,10 +82,9 @@ class VerificationHandler(commands.Cog):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
 
-        if inviter_id:
-            inviter = guild.get_member(inviter_id)
-            if inviter:
-                overwrites[inviter] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        inviter = guild.get_member(inviter_id)
+        if inviter:
+            overwrites[inviter] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
         channel_name = f"verify-{member.name}".lower().replace(" ", "-")
         verify_channel = await guild.create_text_channel(channel_name, overwrites=overwrites, reason="Temporary verification channel")
@@ -85,7 +98,7 @@ class VerificationHandler(commands.Cog):
 
         inviter_mention = f"<@{inviter_id}>" if inviter_id else "Unknown"
         await verify_channel.send(
-            f"🆕 New member: {member.mention}\nVoucher: {inviter_mention}\n\n"
+            f"\U0001f195 New member: {member.mention}\nVoucher: {inviter_mention}\n\n"
             f"{inviter_mention}, please confirm this user by reacting ✅ to this message."
         )
 
@@ -109,7 +122,7 @@ class VerificationHandler(commands.Cog):
                 inviter = guild.get_member(inviter_id) if inviter_id else None
 
                 try:
-                    await member.send("⌛ You have been removed because you were not verified in time.")
+                    await member.send("\u231b You have been removed because you were not verified in time.")
                 except discord.Forbidden:
                     pass
                 await member.kick(reason="No vouch within time limit.")
@@ -119,7 +132,7 @@ class VerificationHandler(commands.Cog):
                     if current["attempts"] >= 2:
                         self.blacklist.add(uid)
                         await self.log_to_channel(guild, BLACKLIST_LOG_CHANNEL_ID,
-                            f"⚠️ Member {member.name} has been blacklisted due to 2 join attempts without vouch.")
+                            f"\u26a0\ufe0f Member {member.name} has been blacklisted due to 2 join attempts without vouch.")
 
                     channel_id = current.get("channel_id")
                     if channel_id:
@@ -130,7 +143,7 @@ class VerificationHandler(commands.Cog):
                 if inviter:
                     try:
                         await inviter.send(
-                            "⚠️ The player you invited failed to get verified in time and has been removed from the server.\n\n"
+                            "\u26a0\ufe0f The player you invited failed to get verified in time and has been removed from the server.\n\n"
                             "Please make sure you are online and in contact when you invite someone, so you can guide them through the verification process and explain the server rules."
                         )
                     except discord.Forbidden:
@@ -169,7 +182,7 @@ class VerificationHandler(commands.Cog):
         if member.id != data["inviter"]:
             channel = guild.get_channel(payload.channel_id)
             if channel:
-                await channel.send("❌ Only the voucher can confirm this user.")
+                await channel.send("\u274c Only the voucher can confirm this user.")
             return
 
         transporter_role = guild.get_role(TRANSPORTER_ROLE_ID)
