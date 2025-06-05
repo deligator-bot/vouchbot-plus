@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import uuid
 
-# Channel IDs (from context)
+# Channel IDs
 GET_INVITE_CHANNEL_ID = 1380173141506129942
 VOUCH_LOG_CHANNEL_ID = 1380173161991110786
 
@@ -13,6 +13,11 @@ class InviteManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.active_invites = {}  # invite_code -> metadata
+
+    async def log_to_channel(self, guild, channel_id, message):
+        channel = guild.get_channel(channel_id)
+        if channel:
+            await channel.send(message)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
@@ -60,12 +65,12 @@ class InviteManager(commands.Cog):
         except discord.Forbidden:
             await channel.send(f"{inviter.mention}, I couldn't send you a DM. Please enable your DMs.")
 
-        # Log the invite in the log channel
-        log_channel = guild.get_channel(VOUCH_LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(
-                f"📨 {inviter.mention} generated a unique invite (`{invite.code}`) – valid for 1 hour, one-time use."
-            )
+        # Log the invite in the log channel via helper
+        await self.log_to_channel(
+            guild,
+            VOUCH_LOG_CHANNEL_ID,
+            f"📨 {inviter.mention} generated a unique invite (`{invite.code}`) – valid for 1 hour, one-time use."
+        )
 
     def get_inviter_by_code(self, code):
         """Returns the inviter data for a given invite code"""
