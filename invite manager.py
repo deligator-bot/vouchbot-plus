@@ -12,7 +12,8 @@ VOUCHER_ROLE_ID = 1380179951155941388
 class InviteManager(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_invites = {}  # invite_code -> metadata
+        self.active_invites = {}       # invite_code -> metadata
+        self.joined_invites = {}       # user_id -> inviter_id
 
     async def log_to_channel(self, guild, channel_id, message):
         channel = guild.get_channel(channel_id)
@@ -23,10 +24,8 @@ class InviteManager(commands.Cog):
     async def on_raw_reaction_add(self, payload):
         if payload.member.bot:
             return
-
         if payload.channel_id != GET_INVITE_CHANNEL_ID:
             return
-
         if str(payload.emoji) != "🔗":
             return
 
@@ -67,7 +66,7 @@ class InviteManager(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
-        """Detect if a member joined using an active invite, and notify the inviter."""
+        """Detect if a member joined using an active invite, and track who invited them."""
         if member.bot:
             return
 
@@ -77,7 +76,8 @@ class InviteManager(commands.Cog):
         for invite in invites:
             if invite.code in self.active_invites:
                 inviter_id = self.active_invites[invite.code]["inviter_id"]
-                self.active_invites[invite.code]["used"] = True  # mark as used
+                self.active_invites[invite.code]["used"] = True
+                self.joined_invites[member.id] = inviter_id  # <-- stap 1: mapping vastleggen
 
                 inviter = guild.get_member(inviter_id)
                 if inviter:
@@ -100,10 +100,13 @@ class InviteManager(commands.Cog):
                         f"🔍 {member.mention} joined using invite from {inviter.mention} (`{invite.code}`)."
                     )
 
-                break  # Only handle first matching invite
+                break  # only handle first match
 
     def get_inviter_by_code(self, code):
         return self.active_invites.get(code)
+
+    def get_inviter_by_user_id(self, user_id):
+        return self.joined_invites.get(user_id)  # <-- toegevoegd voor toekomstige checkvouch integratie
 
 async def setup(bot):
     await bot.add_cog(InviteManager(bot))
