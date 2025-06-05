@@ -16,6 +16,7 @@ class TimeoutBlacklist(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.timeout_history = {}  # user_id -> list of datetime objects
+        self.active_timeouts = {}  # user_id -> expiry datetime
         self.blacklist = set()
         self.cleanup_loop.start()
 
@@ -26,9 +27,12 @@ class TimeoutBlacklist(commands.Cog):
 
     def add_timeout(self, user_id):
         now = datetime.utcnow()
+        expiry = now + timedelta(days=TIMEOUT_DURATION_DAYS)
+
         if user_id not in self.timeout_history:
             self.timeout_history[user_id] = []
         self.timeout_history[user_id].append(now)
+        self.active_timeouts[user_id] = expiry
 
     def count_recent_timeouts(self, user_id):
         now = datetime.utcnow()
@@ -37,12 +41,25 @@ class TimeoutBlacklist(commands.Cog):
         recent = [t for t in self.timeout_history[user_id] if now - t <= timedelta(days=TIMEOUT_WINDOW_DAYS)]
         return len(recent)
 
+    def has_active_timeout(self, user_id):
+        expiry = self.active_timeouts.get(user_id)
+        if expiry and datetime.utcnow() < expiry:
+            return True
+        return False
+
     def is_blacklisted(self, user_id):
         return user_id in self.blacklist
 
     @tasks.loop(minutes=10)
     async def cleanup_loop(self):
         now = datetime.utcnow()
+
+        # Cleanup expired timeouts
+        expired = [uid for uid, expiry in self.active_timeouts.items() if now >= expiry]
+        for uid in expired:
+            del self.active_timeouts[uid]
+
+        # Cleanup old timeout history
         for user_id, times in list(self.timeout_history.items()):
             self.timeout_history[user_id] = [t for t in times if now - t <= timedelta(days=TIMEOUT_WINDOW_DAYS)]
             if not self.timeout_history[user_id]:
@@ -82,10 +99,10 @@ class TimeoutBlacklist(commands.Cog):
         else:
             await self.log_to_channel(guild, TIMEOUT_LOG_CHANNEL_ID, f"⏰ {member.mention} heeft een timeout gekregen ({count}/{MAX_TIMEOUTS_BEFORE_BLACKLIST}).")
             try:
-                await member.send(f"⏰ Je hebt een timeout gekregen van {TIMEOUT_DURATION_DAYS} dagen.")
+                await member.send(f"⏰ Je hebt een timeout gekregen van {TIMEOUT_DURATION_DAYS} dagen. Je mag daarna opnieuw proberen te joinen.")
             except discord.Forbidden:
                 pass
-            # Let op: Discord ondersteunt geen echte 'timeout' via API — eventueel manueel regelen.
+            await member.kick(reason="Timeout: no vouch received")
 
 async def setup(bot):
     await bot.add_cog(TimeoutBlacklist(bot))
