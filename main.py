@@ -16,6 +16,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 from keep_alive import keep_alive
 keep_alive()
 
+# ✅ Sync slash commands bij bot start
+@bot.event
+async def on_ready():
+    await bot.tree.sync()
+    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+
 # ✅ Cogs laden
 async def load_extensions():
     await bot.load_extension("invite_manager")
