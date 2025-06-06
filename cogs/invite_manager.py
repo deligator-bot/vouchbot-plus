@@ -4,9 +4,9 @@ from discord import app_commands
 import uuid
 
 # 📌 Configuratie
-GET_INVITE_CHANNEL_ID = 1380173141506129942
-VOUCH_LOG_CHANNEL_ID = 1380173161991110786
-VOUCHER_ROLE_ID = 1380179951155941388
+GET_INVITE_CHANNEL_ID = 1380179968406982676  # ✅ Jouw juiste get-invite kanaal
+VOUCH_LOG_CHANNEL_ID = 1380173161991110786   # ✅ Logkanaal voor vouches
+VOUCHER_ROLE_ID = 1380179951155941388        # ✅ Juiste rol-ID voor Vouchers
 INVITE_EMOJI = "🔑"
 
 class InviteManager(commands.Cog):
