@@ -3,12 +3,15 @@ from discord.ext import commands
 import asyncio
 import os
 
-# 📦 Configureer de intents voor de bot
-intents = discord.Intents.all()  # Hiermee staan alle intents aan, inclusief Presence Intent
+# ✅ Zorg dat je de BOT_TOKEN instelt als secret environment variable op Render
 
+# 📦 Configureer de intents (alle aan, inclusief Presence en Members)
+intents = discord.Intents.all()
+
+# 📦 Bot setup met command prefix (slashcommands gebruiken app_commands)
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 📦 Lijst van alle extensies (cogs map)
+# 📦 Lijst met extensies (cogs)
 EXTENSIONS = [
     "cogs.invite_post",
     "cogs.invite_manager",
@@ -29,13 +32,20 @@ async def on_ready():
         print(f"❌ Slashcommand sync fout: {e}")
 
 async def main():
+    # ✅ Laad alle extensies (cogs)
     for ext in EXTENSIONS:
         try:
             await bot.load_extension(ext)
             print(f"✅ Extension geladen: {ext}")
         except Exception as e:
             print(f"❌ Fout bij laden van {ext}: {e}")
-    await bot.start(os.environ["BOT_TOKEN"])
+
+    # ✅ Haal de bot token uit de secret environment variabele (Render)
+    bot_token = os.environ.get("BOT_TOKEN")
+    if not bot_token:
+        raise RuntimeError("❌ BOT_TOKEN is niet ingesteld als environment variabele!")
+
+    await bot.start(bot_token)
 
 if __name__ == "__main__":
     asyncio.run(main())
