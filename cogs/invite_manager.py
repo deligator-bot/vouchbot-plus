@@ -140,4 +140,3 @@ class InviteManager(commands.Cog):
 async def setup(bot):
     cog = InviteManager(bot)
     await bot.add_cog(cog)
-    bot.tree.add_command(cog.get_invite)
