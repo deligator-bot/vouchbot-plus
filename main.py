@@ -20,7 +20,12 @@ keep_alive()
 # ✅ Slash commands syncen
 @bot.event
 async def on_ready():
-    await bot.tree.sync()
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Slash commands gesynchroniseerd ({len(synced)} commands)")
+    except Exception as e:
+        print(f"❌ Slash commands sync failed: {e}")
+
     print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
 
 # ✅ Cogs automatisch laden (alleen .py bestanden met setup)
