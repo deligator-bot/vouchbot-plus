@@ -2,6 +2,10 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
+import nest_asyncio
+
+# ✅ Fix voor bestaande event loop (Render + keep_alive)
+nest_asyncio.apply()
 
 # ✅ Intents instellen
 intents = discord.Intents.default()
@@ -53,6 +57,7 @@ async def main():
         print(f"❌ Kon token niet inlezen: {e}")
 
     if token:
+        print("🚀 Bot wordt nu gestart...")
         await bot.start(token)
     else:
         print("❌ Geen geldige token gevonden.")
