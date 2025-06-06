@@ -7,6 +7,10 @@ import nest_asyncio
 # ✅ Fix voor bestaande event loop (Render + keep_alive)
 nest_asyncio.apply()
 
+# ✅ Keep alive server (voor Render hosting)
+from keep_alive import keep_alive
+keep_alive()
+
 # ✅ Intents instellen
 intents = discord.Intents.default()
 intents.members = True
@@ -16,10 +20,6 @@ intents.reactions = True
 
 # ✅ Bot aanmaken
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-# ✅ Keep alive server (Render / Replit)
-from keep_alive import keep_alive
-keep_alive()
 
 # ✅ Slash commands syncen
 @bot.event
@@ -32,7 +32,7 @@ async def on_ready():
 
     print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
 
-# ✅ Cogs automatisch laden (alleen .py bestanden met setup)
+# ✅ Cogs automatisch laden uit ./cogs
 async def load_extensions():
     for filename in os.listdir("./cogs"):
         if filename.endswith(".py") and not filename.startswith("keep") and filename != "__init__.py":
@@ -46,15 +46,15 @@ async def load_extensions():
 # ✅ Main functie
 async def main():
     await load_extensions()
-    
-    # 🔐 Haal token op uit bestand
-    token = None
+
+    # 🔐 Haal token op uit secure bestand (Render)
     try:
         with open('/etc/secrets/BOT_TOKEN', 'r') as f:
             token = f.read().strip()
-            print("🔐 Token succesvol ingelezen uit bestand.")
+            print("🔐 Token succesvol ingelezen.")
     except Exception as e:
         print(f"❌ Kon token niet inlezen: {e}")
+        return
 
     if token:
         print("🚀 Bot wordt nu gestart...")
@@ -62,5 +62,5 @@ async def main():
     else:
         print("❌ Geen geldige token gevonden.")
 
-# ✅ Bot starten
+# ✅ Start bot
 asyncio.run(main())
