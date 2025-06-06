@@ -3,9 +3,7 @@ from discord.ext import commands
 import asyncio
 import os
 
-# ✅ Zorg dat je de BOT_TOKEN instelt als secret environment variable op Render
-
-# 📦 Configureer de intents (alle aan, inclusief Presence en Members)
+# 📦 Configureer de intents (alles aan, inclusief Presence en Members)
 intents = discord.Intents.all()
 
 # 📦 Bot setup met command prefix (slashcommands gebruiken app_commands)
@@ -40,10 +38,14 @@ async def main():
         except Exception as e:
             print(f"❌ Fout bij laden van {ext}: {e}")
 
-    # ✅ Haal de bot token uit de secret environment variabele (Render)
-    bot_token = os.environ.get("BOT_TOKEN")
-    if not bot_token:
-        raise RuntimeError("❌ BOT_TOKEN is niet ingesteld als environment variabele!")
+    # ✅ Lees de token uit bestand (Render -> /etc/secrets/BOT_TOKEN)
+    try:
+        with open('/etc/secrets/BOT_TOKEN', 'r') as f:
+            bot_token = f.read().strip()
+            print("🔐 BOT_TOKEN succesvol opgehaald uit /etc/secrets/")
+    except Exception as e:
+        print(f"❌ Fout bij ophalen van BOT_TOKEN: {e}")
+        return
 
     await bot.start(bot_token)
 
