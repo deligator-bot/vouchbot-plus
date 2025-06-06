@@ -13,24 +13,28 @@ intents.reactions = True
 # ✅ Bot aanmaken
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ✅ Keep alive server (Replit / Render)
+# ✅ Keep alive server (Render / Replit)
 from keep_alive import keep_alive
 keep_alive()
 
-# Sync slash commands on_ready event
+# ✅ Slash commands syncen
 @bot.event
 async def on_ready():
     await bot.tree.sync()
-    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
+    print(f"✅ Logged in as {bot.user} (ID: {bot.user.id})")
 
-# ✅ Cogs automatisch laden
+# ✅ Cogs automatisch laden (alleen .py bestanden met setup)
 async def load_extensions():
     for filename in os.listdir("./cogs"):
-        if filename.endswith(".py"):
+        if filename.endswith(".py") and not filename.startswith("keep") and filename != "__init__.py":
             cog_name = filename[:-3]
-            await bot.load_extension(f"cogs.{cog_name}")
+            try:
+                await bot.load_extension(f"cogs.{cog_name}")
+                print(f"✅ Loaded: {cog_name}")
+            except Exception as e:
+                print(f"❌ Failed to load {cog_name}: {e}")
 
-# ✅ Main starten
+# ✅ Main functie
 async def main():
     await load_extensions()
     token = None
@@ -39,6 +43,7 @@ async def main():
             token = f.read().strip()
     except:
         print("⚠️ Kan token niet inlezen!")
+
     if token:
         await bot.start(token)
     else:
