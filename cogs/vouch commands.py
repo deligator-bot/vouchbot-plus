@@ -57,42 +57,5 @@ class VouchCommands(commands.Cog):
             f"⚠️ <@{member.id}> heeft nu {self.vouch_mistakes[member.id]} strike(s).", ephemeral=False
         )
 
-    @app_commands.command(name="getinvite", description="Get a one-time invite link via DM (Voucher only).")
-    async def getinvite(self, interaction: discord.Interaction):
-        user = interaction.user
-        guild = interaction.guild
-
-        voucher_role = guild.get_role(VOUCHER_ROLE_ID)
-        if voucher_role not in user.roles:
-            await interaction.response.send_message(
-                "❌ You must have the Voucher role to use this command.", ephemeral=True
-            )
-            return
-
-        invite_channel = guild.get_channel(GET_INVITE_CHANNEL_ID)
-        invite = await invite_channel.create_invite(
-            max_uses=1,
-            max_age=3600,
-            unique=True,
-            reason=f"Manual invite requested by {user}"
-        )
-
-        try:
-            await user.send(
-                f"🎫 Here is your unique invite link:\n{invite.url}\nNote: valid for 1 hour and one-time use only."
-            )
-            await interaction.response.send_message(
-                "✅ I've sent you the invite link via DM.", ephemeral=True
-            )
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                "❌ I couldn't send you a DM. Please open your DMs and try again.", ephemeral=True
-            )
-            return
-
-        log_channel = guild.get_channel(VOUCH_LOG_CHANNEL_ID)
-        if log_channel:
-            await log_channel.send(f"📨 {user.mention} requested a manual invite via /getinvite.")
-
 async def setup(bot):
     await bot.add_cog(VouchCommands(bot))
