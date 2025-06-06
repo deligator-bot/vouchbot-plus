@@ -16,7 +16,6 @@ INVITE_MESSAGE_TEXT = (
 class InvitePost(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        bot.loop.create_task(self.send_invite_message())
 
     async def send_invite_message(self):
         await self.bot.wait_until_ready()
@@ -38,6 +37,11 @@ class InvitePost(commands.Cog):
             print("✅ Invite message sent with reaction.")
         except Exception as e:
             print(f"❌ Error while sending invite message: {e}")
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        # Start de asynchrone taak pas als de bot helemaal ingelogd is
+        await self.send_invite_message()
 
 async def setup(bot):
     await bot.add_cog(InvitePost(bot))
