@@ -1,5 +1,4 @@
 import discord
-from discord import app_commands
 from discord.ext import commands
 
 # ✅ Kanaal-ID voor get-invite
@@ -17,25 +16,28 @@ INVITE_MESSAGE_TEXT = (
 class InvitePost(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        bot.loop.create_task(self.send_invite_message())
 
-    @app_commands.command(name="setupinvitemessage", description="Plaats het invitebericht met reactieknop.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def setup_invite_message(self, interaction: discord.Interaction):
-        channel = interaction.guild.get_channel(INVITE_CHANNEL_ID)
+    async def send_invite_message(self):
+        await self.bot.wait_until_ready()
+        channel = self.bot.get_channel(INVITE_CHANNEL_ID)
+
         if not channel:
-            await interaction.response.send_message("❌ Invitekanaal niet gevonden.", ephemeral=True)
+            print("❌ Invite channel not found.")
             return
 
-        # Stuur het invitebericht
-        message = await channel.send(INVITE_MESSAGE_TEXT)
+        try:
+            # Controleer of bericht al bestaat (optioneel)
+            async for msg in channel.history(limit=10):
+                if msg.author == self.bot.user and INVITE_MESSAGE_TEXT in msg.content:
+                    print("ℹ️ Invite message already exists. Skipping.")
+                    return
 
-        # Voeg emoji toe
-        await message.add_reaction(INVITE_EMOJI)
-
-        # Bevestiging terugsturen
-        await interaction.response.send_message(
-            f"✅ Invitebericht succesvol geplaatst in {channel.mention}.", ephemeral=True
-        )
+            message = await channel.send(INVITE_MESSAGE_TEXT)
+            await message.add_reaction(INVITE_EMOJI)
+            print("✅ Invite message sent with reaction.")
+        except Exception as e:
+            print(f"❌ Error while sending invite message: {e}")
 
 async def setup(bot):
     await bot.add_cog(InvitePost(bot))
