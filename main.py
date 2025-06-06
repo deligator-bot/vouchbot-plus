@@ -38,9 +38,15 @@ async def load_extensions():
 async def main():
     await load_extensions()
     
-    # 🔐 Haal token op uit environment variable
-    token = os.environ.get("BOT_TOKEN")
-    
+    # 🔐 Haal token op uit bestand
+    token = None
+    try:
+        with open('/etc/secrets/BOT_TOKEN', 'r') as f:
+            token = f.read().strip()
+            print("🔐 Token succesvol ingelezen uit bestand.")
+    except Exception as e:
+        print(f"❌ Kon token niet inlezen: {e}")
+
     if token:
         await bot.start(token)
     else:
